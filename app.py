@@ -8,6 +8,7 @@ import cv2
 from ultralytics import YOLO
 import numpy as np
 from PIL import Image
+import pygame
 import time
 import threading
 
