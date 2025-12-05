@@ -9,9 +9,7 @@ from ultralytics import YOLO
 import numpy as np
 from PIL import Image
 import time
-import pygame
 import threading
-import winsound  # Windows beep (instant, no lag!)
 
 # Initialize pygame
 pygame.mixer.init()
@@ -87,19 +85,7 @@ def detect_cameras():
 
 # Play beep alert (INSTANT, NO LAG!)
 def play_beep_alert():
-    """Play beep in background thread - Windows native, NO LAG"""
-    def _beep():
-        try:
-            # Beep: frequency, duration (milliseconds)
-            # High pitch warning beep
-            winsound.Beep(1000, 200)  # 1000Hz, 200ms
-            time.sleep(0.1)
-            winsound.Beep(1200, 200)  # 1200Hz, 200ms - double beep for emphasis
-        except:
-            pass
-    
-    thread = threading.Thread(target=_beep, daemon=True)
-    thread.start()
+    pass
 
 model = load_model()
 available_cameras = detect_cameras()
