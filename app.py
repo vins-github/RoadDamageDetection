@@ -1,6 +1,6 @@
 """
-🚗 Road Damage Detection - Optimized Audio Alert
-NO LAG! Audio pre-generated atau pake beep
+🚗 Road Damage Detection - Fixed for Streamlit Cloud
+Audio-safe version with visual alerts
 """
 
 import streamlit as st
@@ -8,12 +8,15 @@ import cv2
 from ultralytics import YOLO
 import numpy as np
 from PIL import Image
-import pygame
 import time
-import threading
 
-# Initialize pygame
-pygame.mixer.init()
+# Try to initialize pygame (optional for audio)
+try:
+    import pygame
+    pygame.mixer.init()
+    AUDIO_AVAILABLE = True
+except (ImportError, Exception):
+    AUDIO_AVAILABLE = False
 
 # Page config
 st.set_page_config(
@@ -49,6 +52,7 @@ st.markdown("""
         font-size: 1.5rem;
         font-weight: bold;
         animation: blink 1s infinite;
+        box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
     }
     @keyframes blink {
         0%, 50%, 100% { opacity: 1; }
@@ -84,9 +88,29 @@ def detect_cameras():
             cap.release()
     return cameras if cameras else [(0, "Camera 0 (Default)")]
 
-# Play beep alert (INSTANT, NO LAG!)
-def play_beep_alert():
-    pass
+# Generate simple beep sound
+def generate_beep():
+    """Generate a simple beep sound (frequency-based)"""
+    if not AUDIO_AVAILABLE:
+        return
+    
+    try:
+        # Create a simple 440Hz beep for 0.2 seconds
+        sample_rate = 22050
+        duration = 0.2
+        frequency = 440
+        
+        samples = int(sample_rate * duration)
+        wave = np.sin(2 * np.pi * frequency * np.linspace(0, duration, samples))
+        wave = (wave * 32767).astype(np.int16)
+        
+        # Convert to stereo
+        stereo_wave = np.column_stack((wave, wave))
+        
+        sound = pygame.sndarray.make_sound(stereo_wave)
+        sound.play()
+    except Exception as e:
+        pass  # Silently fail if audio doesn't work
 
 model = load_model()
 available_cameras = detect_cameras()
@@ -101,7 +125,8 @@ CLASS_INFO = {
 
 # Header
 st.markdown('<h1 class="main-header">🛣️ Road Damage Detection System</h1>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">🚗 Real-time Dashcam | 🔊 Instant Audio Alert (NO LAG!)</p>', unsafe_allow_html=True)
+audio_status = "🔊 Audio Available" if AUDIO_AVAILABLE else "🔇 Visual Alerts Only"
+st.markdown(f'<p class="subtitle">🚗 Real-time Dashcam | {audio_status}</p>', unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
@@ -142,8 +167,11 @@ with st.sidebar:
     )
     
     # Audio settings
-    st.markdown("### 🔊 Audio Alert")
-    enable_audio = st.checkbox("Enable Audio Alert", value=True)
+    st.markdown("### 🔊 Alert Settings")
+    enable_audio = st.checkbox("Enable Audio Alert", value=AUDIO_AVAILABLE)
+    if not AUDIO_AVAILABLE:
+        st.warning("⚠️ Audio not available - using visual alerts only")
+    
     alert_cooldown = st.slider(
         "Alert Cooldown (seconds)",
         min_value=1,
@@ -151,8 +179,6 @@ with st.sidebar:
         value=3,
         help="Jarak minimal antar alert"
     )
-    
-    st.info("💡 Using instant beep alert - NO LAG!")
     
     # Display options
     st.markdown("### 🎨 Display")
@@ -166,10 +192,11 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("""
-    **⚡ Optimized:**
-    - Instant beep alert (no lag!)
-    - Smooth 60 FPS video
-    - Background audio processing
+    **⚡ Features:**
+    - Real-time detection
+    - Visual alerts
+    - Smooth video streaming
+    - Cloud-compatible
     """)
 
 # Main content
@@ -233,11 +260,13 @@ if run_detection:
             
             total_detected += sum(detections.values())
             
-            # INSTANT BEEP ALERT - NO LAG!
+            # Alert system
             current_time = time.time()
-            if enable_audio and pothole_detected:
+            if pothole_detected:
                 if current_time - last_alert_time > alert_cooldown:
-                    play_beep_alert()  # Background thread, instant!
+                    # Try audio alert
+                    if enable_audio and AUDIO_AVAILABLE:
+                        generate_beep()
                     last_alert_time = current_time
             
             # FPS
@@ -252,15 +281,16 @@ if run_detection:
             
             # Visual alert
             if pothole_detected:
+                alert_emoji = "🔊" if (enable_audio and AUDIO_AVAILABLE) else "⚠️"
                 alert_placeholder.markdown(
-                    '<div class="alert-box">⚠️ POTHOLE AHEAD! ⚠️</div>',
+                    f'<div class="alert-box">{alert_emoji} POTHOLE AHEAD! {alert_emoji}</div>',
                     unsafe_allow_html=True
                 )
             else:
                 alert_placeholder.empty()
             
             # Display
-            video_placeholder.image(annotated, channels="RGB", use_column_width=True)
+            video_placeholder.image(annotated, channels="RGB", use_container_width=True)
             
             # Metrics
             with col2:
@@ -271,7 +301,7 @@ if run_detection:
                     details_html = ""
                     for cls, count in detections.items():
                         info = CLASS_INFO.get(cls, (cls, '#999', False))
-                        alert_emoji = " 🔊" if cls == 'Pothole' else ""
+                        alert_emoji = " 🔊" if (cls == 'Pothole' and AUDIO_AVAILABLE) else ""
                         details_html += f"""
                         <div style="
                             background: {info[1]}22;
@@ -298,7 +328,7 @@ else:
 st.markdown("---")
 st.markdown(
     "<p style='text-align: center; color: #666;'>"
-    "🎓 <b>Road Damage Detection</b> | YOLOv8 | Optimized for Real-time Performance"
+    "🎓 <b>Road Damage Detection</b> | YOLOv8 | Cloud-Compatible"
     "</p>",
     unsafe_allow_html=True
 )
