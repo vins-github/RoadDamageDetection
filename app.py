@@ -1,6 +1,6 @@
 """
-🚗 Road Damage Detection - Hybrid Mode
-Cloud: Upload Video/Image | Local: Real-time Webcam
+🚗 Road Damage Detection - Cloud Real-time Demo
+Auto-loop demo video untuk simulasi real-time tanpa webcam!
 """
 
 import streamlit as st
@@ -10,9 +10,10 @@ import numpy as np
 from PIL import Image
 import time
 import tempfile
+import urllib.request
 import os
 
-# Try to initialize pygame (optional for audio)
+# Try to initialize pygame
 try:
     import pygame
     pygame.mixer.init()
@@ -60,12 +61,18 @@ st.markdown("""
         0%, 50%, 100% { opacity: 1; }
         25%, 75% { opacity: 0.5; }
     }
-    .info-card {
-        background: #f0f2f6;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 5px solid #667eea;
-        margin: 1rem 0;
+    .live-badge {
+        background: #ff0000;
+        color: white;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-weight: bold;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -92,6 +99,17 @@ def generate_beep():
     except:
         pass
 
+# Download demo video from URL (optional)
+@st.cache_data
+def download_demo_video(url):
+    """Download demo video from URL"""
+    try:
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        urllib.request.urlretrieve(url, temp_file.name)
+        return temp_file.name
+    except:
+        return None
+
 model = load_model()
 
 # Class info
@@ -102,71 +120,63 @@ CLASS_INFO = {
     'Pothole': ('🕳️ Lubang', '#FFE66D', True)
 }
 
-# Detect if running locally
-def is_local():
-    """Check if running on local machine"""
-    try:
-        cap = cv2.VideoCapture(0)
-        ret = cap.isOpened()
-        cap.release()
-        return ret
-    except:
-        return False
-
-RUNNING_LOCAL = is_local()
-
 # Header
 st.markdown('<h1 class="main-header">🛣️ Road Damage Detection System</h1>', unsafe_allow_html=True)
-
-if RUNNING_LOCAL:
-    st.markdown('<p class="subtitle">💻 Local Mode: Real-time Webcam Available!</p>', unsafe_allow_html=True)
-else:
-    st.markdown('<p class="subtitle">☁️ Cloud Mode: Upload Video/Image</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">📹 Real-time Demo Mode | Upload Your Own Video</p>', unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
     st.markdown("## ⚙️ Configuration")
     
-    # Mode detection
-    if RUNNING_LOCAL:
-        st.success("✅ Running Locally - Webcam Available")
-    else:
-        st.info("☁️ Running on Cloud - Upload Mode")
-    
-    st.markdown("---")
-    
-    # Input source selection
-    st.markdown("### 📥 Input Source")
-    
-    if RUNNING_LOCAL:
-        input_options = ["📹 Real-time Webcam", "📤 Upload Video", "🖼️ Upload Image"]
-    else:
-        input_options = ["📤 Upload Video", "🖼️ Upload Image"]
-    
-    input_mode = st.radio("Select Input", input_options)
+    # Input mode
+    st.markdown("### 📥 Demo Mode")
+    demo_mode = st.radio(
+        "Select Mode",
+        [
+            "🎬 Live Demo (Auto-loop)",
+            "📤 Upload Your Video",
+            "🖼️ Upload Image"
+        ],
+        help="Live Demo: Upload video sekali, akan loop seperti live stream"
+    )
     
     uploaded_file = None
-    camera_idx = 0
+    demo_video_path = None
     
-    if input_mode == "📤 Upload Video":
+    if demo_mode == "🎬 Live Demo (Auto-loop)":
+        st.info("📹 Upload video dashcam untuk demo real-time")
         uploaded_file = st.file_uploader(
-            "Choose a video file",
+            "Upload Demo Video",
             type=['mp4', 'avi', 'mov', 'mkv', 'webm'],
-            help="Upload dashcam video for analysis"
+            help="Video ini akan di-loop terus seperti live stream"
         )
-    elif input_mode == "🖼️ Upload Image":
+        
+        # Option to use sample video URL
+        use_sample = st.checkbox("Atau pakai sample video online", value=False)
+        if use_sample:
+            sample_url = st.text_input(
+                "URL Video (YouTube, Google Drive, dll)",
+                placeholder="https://example.com/dashcam.mp4",
+                help="Paste URL video dashcam"
+            )
+            if sample_url and st.button("Download & Use"):
+                with st.spinner("Downloading video..."):
+                    demo_video_path = download_demo_video(sample_url)
+                    if demo_video_path:
+                        st.success("✅ Video downloaded!")
+                    else:
+                        st.error("❌ Failed to download")
+    
+    elif demo_mode == "📤 Upload Your Video":
         uploaded_file = st.file_uploader(
-            "Choose an image file",
-            type=['jpg', 'jpeg', 'png', 'bmp'],
-            help="Upload road image for analysis"
+            "Choose Video File",
+            type=['mp4', 'avi', 'mov', 'mkv', 'webm']
         )
-    elif input_mode == "📹 Real-time Webcam":
-        camera_idx = st.number_input(
-            "Camera Index",
-            min_value=0,
-            max_value=10,
-            value=0,
-            help="Usually 0 for default camera"
+    
+    else:  # Image mode
+        uploaded_file = st.file_uploader(
+            "Choose Image File",
+            type=['jpg', 'jpeg', 'png', 'bmp']
         )
     
     # Model settings
@@ -196,44 +206,31 @@ with st.sidebar:
     show_conf = st.checkbox("Show Confidence", value=True)
     show_fps = st.checkbox("Show FPS", value=True)
     
+    if demo_mode == "🎬 Live Demo (Auto-loop)":
+        show_live_badge = st.checkbox("Show LIVE Badge", value=True)
+    else:
+        show_live_badge = False
+    
     st.markdown("---")
     st.markdown("""
-    **💡 Tips:**
-    - **Local**: Use real-time webcam
-    - **Cloud**: Upload video/image
-    - Supported: MP4, AVI, MOV, JPG, PNG
-    """)
-
-# Info card about deployment
-with st.expander("ℹ️ Untuk Dosen - Cara Demo Real-time", expanded=False):
-    st.markdown("""
-    ### 🎓 Cara Menunjukkan Real-time Detection:
-    
-    **Opsi 1: Demo Local (Recommended)**
-    1. Jalankan aplikasi di laptop: `streamlit run app.py`
-    2. Pilih "Real-time Webcam"
-    3. Tunjukkan deteksi langsung dengan webcam/dashcam
-    
-    **Opsi 2: Cloud dengan Video Upload**
-    1. Deploy ke Streamlit Cloud
-    2. Record video dashcam terlebih dahulu
-    3. Upload dan tunjukkan hasil deteksi
-    
-    **Opsi 3: Screen Recording**
-    1. Record screen saat run local mode
-    2. Tunjukkan video recording sebagai bukti
-    3. Bisa di-upload ke cloud juga
-    
-    ### 📌 Catatan:
-    - Webcam **HANYA bisa di local**, tidak di cloud
-    - Cloud butuh upload karena server tidak punya kamera
-    - Ini **batasan teknologi web**, bukan bug aplikasi
+    **💡 Tips Demo:**
+    - **Live Demo**: Video loop terus (seperti live)
+    - Paling cocok untuk presentasi
+    - Terlihat seperti real-time!
     """)
 
 # Main content
 col1, col2 = st.columns([3, 1])
 
 with col1:
+    # Show LIVE badge if in demo mode
+    if demo_mode == "🎬 Live Demo (Auto-loop)" and show_live_badge:
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <span class="live-badge">🔴 LIVE</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("### 📹 Detection Feed")
     video_placeholder = st.empty()
     alert_placeholder = st.empty()
@@ -247,7 +244,7 @@ with col2:
     detection_details = st.empty()
 
 # Process single image
-if input_mode == "🖼️ Upload Image" and uploaded_file:
+if demo_mode == "🖼️ Upload Image" and uploaded_file:
     image = Image.open(uploaded_file)
     img_array = np.array(image)
     
@@ -256,7 +253,7 @@ if input_mode == "🖼️ Upload Image" and uploaded_file:
     elif img_array.shape[2] == 4:
         img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
     
-    with st.spinner("🔍 Analyzing image..."):
+    with st.spinner("🔍 Analyzing..."):
         results = model.predict(img_array, conf=confidence, verbose=False)
         annotated = results[0].plot(labels=show_labels, conf=show_conf)
         annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
@@ -303,8 +300,8 @@ if input_mode == "🖼️ Upload Image" and uploaded_file:
             else:
                 detection_details.success("✅ No damage")
 
-# Process video or webcam
-elif (input_mode == "📤 Upload Video" and uploaded_file) or input_mode == "📹 Real-time Webcam":
+# Process video
+elif (uploaded_file or demo_video_path) and demo_mode != "🖼️ Upload Image":
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
@@ -321,34 +318,41 @@ elif (input_mode == "📤 Upload Video" and uploaded_file) or input_mode == "�
         st.session_state.running = False
     
     if st.session_state.running:
-        if input_mode == "📤 Upload Video":
+        # Save uploaded file to temp
+        if uploaded_file:
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
             tfile.write(uploaded_file.read())
-            cap = cv2.VideoCapture(tfile.name)
+            video_path = tfile.name
         else:
-            cap = cv2.VideoCapture(camera_idx)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            cap.set(cv2.CAP_PROP_FPS, 30)
+            video_path = demo_video_path
+        
+        cap = cv2.VideoCapture(video_path)
         
         if not cap.isOpened():
-            st.error("❌ Cannot open video source!")
+            st.error("❌ Cannot open video!")
         else:
-            st.success("✅ Video source active!")
+            if demo_mode == "🎬 Live Demo (Auto-loop)":
+                st.success("🔴 LIVE: Auto-loop mode active!")
+            else:
+                st.success("✅ Video loaded!")
             
             frame_count = 0
             start_time = time.time()
             total_detected = 0
             last_alert_time = 0
+            loop_count = 0
             
             while st.session_state.running:
                 ret, frame = cap.read()
+                
+                # Auto-loop for demo mode
                 if not ret:
-                    if input_mode == "📤 Upload Video":
-                        # Loop video
+                    if demo_mode == "🎬 Live Demo (Auto-loop)":
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        loop_count += 1
                         continue
                     else:
+                        st.info("⏹️ Video ended")
                         break
                 
                 results = model.predict(frame, conf=confidence, verbose=False, imgsz=640)
@@ -380,6 +384,12 @@ elif (input_mode == "📤 Upload Video" and uploaded_file) or input_mode == "�
                     cv2.rectangle(annotated, (10, 10), (200, 60), (0, 0, 0), -1)
                     cv2.putText(annotated, f"FPS: {fps:.1f}", (20, 45),
                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+                
+                # Show loop count in demo mode
+                if demo_mode == "🎬 Live Demo (Auto-loop)" and loop_count > 0:
+                    cv2.rectangle(annotated, (10, 70), (250, 120), (0, 0, 0), -1)
+                    cv2.putText(annotated, f"Loop: {loop_count}", (20, 105),
+                               cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 0), 2)
                 
                 if pothole_detected:
                     alert_placeholder.markdown(
@@ -418,51 +428,39 @@ elif (input_mode == "📤 Upload Video" and uploaded_file) or input_mode == "�
                 time.sleep(0.01)
             
             cap.release()
-            if input_mode == "📤 Upload Video":
+            if uploaded_file:
                 try:
-                    os.unlink(tfile.name)
+                    os.unlink(video_path)
                 except:
                     pass
             st.session_state.running = False
-            st.warning("⏹️ Detection stopped")
 
 else:
-    # Show instructions
-    st.markdown('<div class="info-card">', unsafe_allow_html=True)
-    if RUNNING_LOCAL:
-        st.markdown("""
-        ### 🎯 Ready to Detect!
-        
-        **For Real-time Detection:**
-        1. Select "📹 Real-time Webcam" in sidebar
-        2. Click "▶️ Start Detection"
-        3. Point camera at road/dashcam footage
-        
-        **For Video Analysis:**
-        1. Select "📤 Upload Video"
-        2. Choose your dashcam recording
-        3. Click "▶️ Start Detection"
-        """)
-    else:
-        st.markdown("""
-        ### 📤 Upload Mode Active
-        
-        **Steps:**
-        1. Select input type in sidebar
-        2. Upload your video or image
-        3. Click "▶️ Start Detection"
-        
-        **Note:** Real-time webcam only works when running locally.
-        For demo purposes, you can:
-        - Record a video on local machine
-        - Upload it here for cloud demo
-        """)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.info("""
+    ### 🎯 Cara Pakai:
+    
+    **Mode Live Demo (Recommended untuk presentasi):**
+    1. Upload video dashcam sekali
+    2. Klik "Start Detection"  
+    3. Video akan loop otomatis seperti live stream
+    4. Cocok untuk demo ke dosen!
+    
+    **Mode Upload Video:**
+    - Upload video, play sekali, selesai
+    
+    **Mode Upload Image:**
+    - Upload foto untuk analisis static
+    
+    💡 **Tip**: Pakai "Live Demo" mode dengan video 30-60 detik untuk demo smooth!
+    """)
 
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
     <p><b>🎓 Road Damage Detection System</b></p>
-    <p>YOLOv8 | Real-time & Upload Support | Local & Cloud Compatible</p>
+    <p>YOLOv8 | Cloud-Compatible | Live Demo Mode</p>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">
+        💡 Demo mode: Upload video → Auto-loop → Terlihat seperti real-time!
+    </p>
 </div>
 """, unsafe_allow_html=True)
