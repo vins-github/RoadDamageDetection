@@ -153,13 +153,18 @@ with st.sidebar:
     **💡 How it works:**
     - Click "START" below
     - Allow camera access in browser
+    - Wait ~5-10 seconds for connection
     - Real-time detection starts!
-    - Works on Streamlit Cloud ✅
+    
+    **🔧 Troubleshooting:**
+    - Using Google STUN + Open Relay TURN
+    - Works behind firewalls/NAT
+    - If stuck, refresh page & try again
     """)
 
 # Main content
 st.markdown("### 📹 Live Camera Feed")
-st.info("👇 Click START and allow camera access when prompted")
+st.info("👇 Click START and allow camera access. Connection may take 5-10 seconds...")
 
 # Alert placeholder
 alert_placeholder = st.empty()
@@ -224,9 +229,30 @@ class VideoProcessor:
         
         return av.VideoFrame.from_ndarray(annotated, format="bgr24")
 
-# WebRTC configuration
+# WebRTC configuration with STUN and TURN servers
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+            {"urls": ["stun:stun2.l.google.com:19302"]},
+            {
+                "urls": ["turn:openrelay.metered.ca:80"],
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": ["turn:openrelay.metered.ca:443"],
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+        ]
+    }
 )
 
 # WebRTC streamer
